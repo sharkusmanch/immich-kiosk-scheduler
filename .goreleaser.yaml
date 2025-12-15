@@ -1,0 +1,141 @@
+version: 2
+
+project_name: immich-kiosk-scheduler
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: immich-kiosk-scheduler
+    main: ./cmd/immich-kiosk-scheduler
+    binary: immich-kiosk-scheduler
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+dockers:
+  - id: amd64
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:{{ .Tag }}-amd64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}-amd64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:latest-amd64"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Scheduling proxy for Immich Kiosk"
+      - "--label=org.opencontainers.image.url=https://github.com/sharkusmanch/immich-kiosk-scheduler"
+      - "--label=org.opencontainers.image.source=https://github.com/sharkusmanch/immich-kiosk-scheduler"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+  - id: arm64
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:{{ .Tag }}-arm64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}-arm64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}.{{ .Minor }}-arm64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:latest-arm64"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=Scheduling proxy for Immich Kiosk"
+      - "--label=org.opencontainers.image.url=https://github.com/sharkusmanch/immich-kiosk-scheduler"
+      - "--label=org.opencontainers.image.source=https://github.com/sharkusmanch/immich-kiosk-scheduler"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+docker_manifests:
+  - name_template: "ghcr.io/sharkusmanch/immich-kiosk-scheduler:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:{{ .Tag }}-amd64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:{{ .Tag }}-arm64"
+
+  - name_template: "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}"
+    image_templates:
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}-amd64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}-arm64"
+
+  - name_template: "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:v{{ .Major }}.{{ .Minor }}-arm64"
+
+  - name_template: "ghcr.io/sharkusmanch/immich-kiosk-scheduler:latest"
+    image_templates:
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:latest-amd64"
+      - "ghcr.io/sharkusmanch/immich-kiosk-scheduler:latest-arm64"
+
+release:
+  github:
+    owner: sharkusmanch
+    name: immich-kiosk-scheduler
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Docker Images
+
+    ```bash
+    docker pull ghcr.io/sharkusmanch/immich-kiosk-scheduler:{{ .Tag }}
+    ```
+
+    ## Installation
+
+    Download the appropriate binary for your platform from the assets below.
+  footer: |
+    **Full Changelog**: https://github.com/sharkusmanch/immich-kiosk-scheduler/compare/{{ .PreviousTag }}...{{ .Tag }}

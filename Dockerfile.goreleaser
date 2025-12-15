@@ -1,0 +1,8 @@
+FROM scratch
+
+COPY immich-kiosk-scheduler /immich-kiosk-scheduler
+
+EXPOSE 8080
+
+ENTRYPOINT ["/immich-kiosk-scheduler"]
+CMD ["serve"]

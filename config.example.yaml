@@ -1,0 +1,65 @@
+# immich-kiosk-scheduler configuration
+# ====================================
+# Copy this file to config.yaml and customize for your setup.
+
+# Base URL of your Immich Kiosk instance (required)
+kiosk_url: "https://kiosk.example.com"
+
+# Default album ID to use when no schedule matches (required)
+# This is typically your "Favorites" or general photo album
+default_album: "your-default-album-uuid"
+
+# Port to listen on (default: 8080)
+# Can be overridden with --port flag or IKS_PORT env var
+port: 8080
+
+# Log level: debug, info, warn, error (default: info)
+# Can be overridden with --log-level flag or IKS_LOG_LEVEL env var
+log_level: "info"
+
+# Query parameters to pass through to Immich Kiosk
+# Only these parameters will be forwarded from incoming requests
+# See: https://docs.immichkiosk.app/configuration/ for available options
+passthrough_params:
+  - transition
+  - duration
+  - show_time
+  - show_date
+  - image_fit
+
+# Schedule for album rotation
+# Each entry defines a date range and the album to display during that period.
+# - Entries are evaluated in order; first match wins
+# - Date format is MM-DD (month-day)
+# - Ranges that cross year boundaries are supported (e.g., 11-15 to 01-01)
+#
+# To find your album IDs:
+# 1. Open Immich web UI
+# 2. Navigate to the album
+# 3. Copy the UUID from the URL (e.g., https://immich.example.com/albums/abc123-...)
+schedule:
+  # Christmas/Holiday season (Nov 15 - Jan 1)
+  - name: christmas
+    album: "d2459437-3267-47ea-a421-9bfeedde604d"
+    start: "11-15"
+    end: "01-01"
+
+  # Spring (Mar 20 - Jun 20)
+  - name: spring
+    album: "2cdef2c6-0028-4a74-a151-7691ad6d63e7"
+    start: "03-20"
+    end: "06-20"
+
+  # Summer (Jun 21 - Sep 21)
+  - name: summer
+    album: "c6a30be2-ae21-4c9c-9404-2a8d6000574a"
+    start: "06-21"
+    end: "09-21"
+
+  # Fall (Sep 22 - Nov 14)
+  - name: fall
+    album: "1a1cadea-47b8-4666-8744-8c25ba19453d"
+    start: "09-22"
+    end: "11-14"
+
+  # Any dates not covered by the above will use default_album

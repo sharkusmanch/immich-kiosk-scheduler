@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,6 +27,8 @@ type Config struct {
 	LogLevel          string          `mapstructure:"log_level"`
 	PassthroughParams []string        `mapstructure:"passthrough_params"`
 	Schedule          []ScheduleEntry `mapstructure:"schedule"`
+	MetricsUsername   string          `mapstructure:"metrics_username"`
+	MetricsPassword   string          `mapstructure:"metrics_password"`
 }
 
 // dateRegex validates MM-DD format.
@@ -91,6 +94,19 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.KioskURL) == "" {
 		return fmt.Errorf("kiosk_url is required")
 	}
+
+	// Validate kiosk_url scheme
+	parsedURL, err := url.Parse(c.KioskURL)
+	if err != nil {
+		return fmt.Errorf("invalid kiosk_url: %w", err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("kiosk_url must use http or https scheme, got %q", parsedURL.Scheme)
+	}
+	if parsedURL.Host == "" {
+		return fmt.Errorf("kiosk_url must include a host")
+	}
+
 	if strings.TrimSpace(c.DefaultAlbum) == "" {
 		return fmt.Errorf("default_album is required")
 	}
@@ -150,6 +166,8 @@ func Load(configPath string) (*Config, error) {
 	_ = v.BindEnv("default_album", "IKS_DEFAULT_ALBUM")
 	_ = v.BindEnv("port", "IKS_PORT")
 	_ = v.BindEnv("log_level", "IKS_LOG_LEVEL")
+	_ = v.BindEnv("metrics_username", "IKS_METRICS_USERNAME")
+	_ = v.BindEnv("metrics_password", "IKS_METRICS_PASSWORD")
 
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {

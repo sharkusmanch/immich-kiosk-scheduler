@@ -1,8 +1,17 @@
+FROM alpine:3.20 AS certs
+RUN apk add --no-cache ca-certificates
+
 FROM scratch
+
+# Copy CA certificates for HTTPS
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY immich-kiosk-scheduler /immich-kiosk-scheduler
 
 EXPOSE 8080
+
+# Run as non-root (nobody:nobody)
+USER 65534:65534
 
 ENTRYPOINT ["/immich-kiosk-scheduler"]
 CMD ["serve"]

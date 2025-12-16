@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -51,6 +52,8 @@ type Server struct {
 	passthroughParams map[string]bool
 	port              int
 	logger            *slog.Logger
+	metricsUsername   string
+	metricsPassword   string
 }
 
 // New creates a new Server instance.
@@ -70,6 +73,8 @@ func New(cfg *config.Config, sched *scheduler.Scheduler) (*Server, error) {
 		passthroughParams: passthroughMap,
 		port:              cfg.Port,
 		logger:            slog.Default(),
+		metricsUsername:   cfg.MetricsUsername,
+		metricsPassword:   cfg.MetricsPassword,
 	}
 
 	s.setupRoutes()
@@ -84,14 +89,58 @@ func (s *Server) setupRoutes() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Throttle(100)) // Rate limit: 100 concurrent requests
+	r.Use(s.securityHeadersMiddleware)
 	r.Use(s.loggingMiddleware)
 
 	// Routes
 	r.Get("/", s.handleRedirect)
 	r.Get("/healthz", s.handleHealth)
-	r.Get("/metrics", promhttp.Handler().ServeHTTP)
+
+	// Metrics with optional basic auth
+	if s.metricsUsername != "" && s.metricsPassword != "" {
+		r.With(s.basicAuthMiddleware).Get("/metrics", promhttp.Handler().ServeHTTP)
+	} else {
+		r.Get("/metrics", promhttp.Handler().ServeHTTP)
+	}
 
 	s.router = r
+}
+
+// basicAuthMiddleware provides HTTP Basic Authentication for protected endpoints.
+func (s *Server) basicAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Basic realm="metrics"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Constant time comparison to prevent timing attacks
+		userMatch := subtle.ConstantTimeCompare([]byte(user), []byte(s.metricsUsername)) == 1
+		passMatch := subtle.ConstantTimeCompare([]byte(pass), []byte(s.metricsPassword)) == 1
+
+		if !userMatch || !passMatch {
+			w.Header().Set("WWW-Authenticate", `Basic realm="metrics"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// securityHeadersMiddleware adds security headers to responses.
+func (s *Server) securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // loggingMiddleware logs HTTP requests.
@@ -183,16 +232,28 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 // Start begins listening for HTTP requests.
 func (s *Server) Start() error {
 	addr := fmt.Sprintf(":%d", s.port)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           s.router,
+		ReadTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 2 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	s.logger.Info("starting server", slog.String("addr", addr))
-	return http.ListenAndServe(addr, s.router)
+	return srv.ListenAndServe()
 }
 
 // StartWithContext begins listening for HTTP requests with graceful shutdown support.
 func (s *Server) StartWithContext(ctx context.Context) error {
 	addr := fmt.Sprintf(":%d", s.port)
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: s.router,
+		Addr:              addr,
+		Handler:           s.router,
+		ReadTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 2 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Start server in goroutine

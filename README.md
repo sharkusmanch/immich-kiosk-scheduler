@@ -81,6 +81,8 @@ schedule:
 | `log_level` | Logging level (debug/info/warn/error) | `info` | `IKS_LOG_LEVEL` |
 | `passthrough_params` | Query params to forward | `[]` | - |
 | `schedule` | List of schedule entries | `[]` | - |
+| `metrics_username` | Basic auth username for /metrics | *none* | `IKS_METRICS_USERNAME` |
+| `metrics_password` | Basic auth password for /metrics | *none* | `IKS_METRICS_PASSWORD` |
 
 ### Schedule Entry
 
@@ -220,6 +222,55 @@ docker build -t immich-kiosk-scheduler .
                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
                                       This is your album ID
    ```
+
+## Security
+
+### Security Features
+
+| Feature | Description |
+|---------|-------------|
+| **HTTP Server Timeouts** | Prevents slowloris attacks (read: 5s, header: 2s, write: 10s, idle: 120s) |
+| **Rate Limiting** | 100 concurrent requests max (chi Throttle middleware) |
+| **Security Headers** | X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, CSP, Referrer-Policy |
+| **Non-root Container** | Runs as UID/GID 65534 (nobody) |
+| **URL Validation** | kiosk_url must use http/https scheme |
+| **Parameter Sanitization** | Passthrough params are validated and URL-encoded |
+| **Optional Metrics Auth** | Basic authentication for /metrics endpoint |
+| **Constant-time Comparison** | Auth credentials compared using crypto/subtle |
+
+### Protecting the Metrics Endpoint
+
+To enable basic authentication for the `/metrics` endpoint:
+
+```yaml
+# config.yaml
+metrics_username: "prometheus"
+metrics_password: "your-secure-password"
+```
+
+Or via environment variables:
+```bash
+export IKS_METRICS_USERNAME=prometheus
+export IKS_METRICS_PASSWORD=your-secure-password
+```
+
+Configure Prometheus to authenticate:
+```yaml
+scrape_configs:
+  - job_name: immich-kiosk-scheduler
+    basic_auth:
+      username: prometheus
+      password: your-secure-password
+    static_configs:
+      - targets: ['immich-kiosk-scheduler:8080']
+```
+
+### Deployment Recommendations
+
+1. **Run behind a reverse proxy** (nginx, Traefik) for TLS termination
+2. **Use network policies** to restrict access in Kubernetes
+3. **Don't expose /metrics publicly** - use metrics auth or network isolation
+4. **Pin Docker image tags** to specific versions (e.g., `v1.0.0`, not `latest`)
 
 ## License
 
